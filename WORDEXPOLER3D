@@ -1,0 +1,207 @@
+"use client";
+import React from "react";
+
+function MainComponent() {
+  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [worldData, setWorldData] = useState(null);
+  const [generatingLocation, setGeneratingLocation] = useState(false);
+
+  const generateLocationDetails = async (location) => {
+    setGeneratingLocation(true);
+    setError(null);
+    try {
+      const response = await fetch("/integrations/chat-gpt/conversationgpt4", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [
+            {
+              role: "user",
+              content: `Generate a detailed description for a fantasy location named ${location.name}`,
+            },
+          ],
+          json_schema: {
+            name: "location_details",
+            schema: {
+              type: "object",
+              properties: {
+                description: { type: "string" },
+                climate: { type: "string" },
+                inhabitants: { type: "string" },
+                points_of_interest: {
+                  type: "array",
+                  items: { type: "string" },
+                },
+              },
+              required: [
+                "description",
+                "climate",
+                "inhabitants",
+                "points_of_interest",
+              ],
+              additionalProperties: false,
+            },
+          },
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to generate location details");
+      }
+
+      const data = await response.json();
+      return JSON.parse(data.choices[0].message.content);
+    } catch (err) {
+      setError("Failed to generate location details");
+      console.error(err);
+    } finally {
+      setGeneratingLocation(false);
+    }
+  };
+
+  const generateLocationImage = async (location) => {
+    try {
+      const response = await fetch(
+        `/integrations/stable-diffusion-v-3/?prompt=${encodeURIComponent(
+          `fantasy location ${location.name}, aerial view, detailed terrain, 3D render`
+        )}&width=512&height=512`
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to generate location image");
+      }
+
+      const data = await response.json();
+      return data.data[0];
+    } catch (err) {
+      setError("Failed to generate location image");
+      console.error(err);
+    }
+  };
+
+  return (
+    <div className="flex h-screen bg-gray-900 text-white overflow-hidden">
+      <div className="w-80 bg-gray-800 p-4 flex flex-col">
+        <div className="mb-4">
+          <div className="relative">
+            <input
+              type="text"
+              placeholder="Search locations..."
+              className="w-full bg-gray-700 rounded-lg px-4 py-2 pl-10"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+            <i className="fa fa-search absolute left-3 top-3 text-gray-400"></i>
+          </div>
+        </div>
+
+        <div className="flex-1 overflow-y-auto">
+          <div className="space-y-2">
+            {error && (
+              <div className="bg-red-500 bg-opacity-10 text-red-400 p-3 rounded-lg mb-4">
+                {error}
+              </div>
+            )}
+
+            {loading ? (
+              <div className="text-center py-4">
+                <i className="fa fa-spinner fa-spin text-2xl"></i>
+              </div>
+            ) : (
+              worldData?.locations?.map((location) => (
+                <button
+                  key={location.id}
+                  onClick={() => setSelectedLocation(location)}
+                  className={`w-full text-left p-3 rounded-lg transition-colors ${
+                    selectedLocation?.id === location.id
+                      ? "bg-blue-600"
+                      : "bg-gray-700 hover:bg-gray-600"
+                  }`}
+                >
+                  <div className="font-bold">{location.name}</div>
+                  <div className="text-sm text-gray-400">{location.type}</div>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+
+        <div className="mt-4 pt-4 border-t border-gray-700">
+          <button className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-lg px-4 py-2 flex items-center justify-center">
+            <i className="fa fa-plus mr-2"></i>
+            Add New Location
+          </button>
+        </div>
+      </div>
+
+      <div className="flex-1 relative">
+        <div className="absolute inset-0 bg-gray-900">
+          <div className="absolute top-4 right-4 space-x-2">
+            <button className="bg-gray-800 hover:bg-gray-700 rounded-full p-2">
+              <i className="fa fa-plus"></i>
+            </button>
+            <button className="bg-gray-800 hover:bg-gray-700 rounded-full p-2">
+              <i className="fa fa-minus"></i>
+            </button>
+            <button className="bg-gray-800 hover:bg-gray-700 rounded-full p-2">
+              <i className="fa fa-compass"></i>
+            </button>
+          </div>
+        </div>
+
+        {selectedLocation && (
+          <div className="absolute bottom-4 left-4 right-4 bg-gray-800 rounded-lg p-4 shadow-lg">
+            <div className="flex items-start">
+              {selectedLocation.imageUrl && (
+                <img
+                  src={selectedLocation.imageUrl}
+                  alt={selectedLocation.name}
+                  className="w-32 h-32 rounded-lg object-cover mr-4"
+                />
+              )}
+              <div className="flex-1">
+                <h2 className="text-2xl font-bold mb-2">
+                  {selectedLocation.name}
+                </h2>
+                <p className="text-gray-400 mb-2">
+                  {selectedLocation.description}
+                </p>
+                {generatingLocation ? (
+                  <div className="text-center py-2">
+                    <i className="fa fa-spinner fa-spin"></i>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <h3 className="font-bold mb-1">Climate</h3>
+                      <p className="text-sm text-gray-400">
+                        {selectedLocation.climate}
+                      </p>
+                    </div>
+                    <div>
+                      <h3 className="font-bold mb-1">Inhabitants</h3>
+                      <p className="text-sm text-gray-400">
+                        {selectedLocation.inhabitants}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => setSelectedLocation(null)}
+                className="ml-4 text-gray-400 hover:text-white"
+              >
+                <i className="fa fa-times"></i>
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+export default MainComponent;
