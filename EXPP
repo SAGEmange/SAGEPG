@@ -1,0 +1,267 @@
+"use client";
+import React from "react";
+
+function MainComponent() {
+  const [activeTab, setActiveTab] = useState("fangs");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [selectedFang, setSelectedFang] = useState(null);
+  const [creatures, setCreatures] = useState([]);
+  const [resonanceData, setResonanceData] = useState(null);
+  const [factions, setFactions] = useState([]);
+
+  const fangs = [
+    {
+      id: 1,
+      name: "Crimson Fang",
+      territory: "Northern Wastes",
+      leader: "Karvax the Bloodbound",
+      resonanceAffinity: "Blood",
+    },
+    {
+      id: 2,
+      name: "Shadow Fang",
+      territory: "Dark Forest",
+      leader: "Nyxis Shadowweaver",
+      resonanceAffinity: "Shadow",
+    },
+    {
+      id: 3,
+      name: "Storm Fang",
+      territory: "Thunder Plains",
+      leader: "Voltara Stormborn",
+      resonanceAffinity: "Lightning",
+    },
+    {
+      id: 4,
+      name: "Frost Fang",
+      territory: "Frozen Peaks",
+      leader: "Glacius Frostwind",
+      resonanceAffinity: "Ice",
+    },
+    {
+      id: 5,
+      name: "Earth Fang",
+      territory: "Stone Valley",
+      leader: "Terra Earthshaper",
+      resonanceAffinity: "Earth",
+    },
+  ];
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const response = await fetch("/api/vel-karion/data", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: "getData" }),
+        });
+
+        if (!response.ok) throw new Error("Failed to fetch data");
+
+        const data = await response.json();
+        setCreatures(data.creatures || []);
+        setResonanceData(data.resonance || null);
+        setFactions(data.factions || []);
+      } catch (err) {
+        setError("Failed to load Vel'Karion data");
+        console.error(err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const renderFangsSection = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      {fangs.map((fang) => (
+        <div
+          key={fang.id}
+          onClick={() => setSelectedFang(fang)}
+          className={`
+            bg-gray-800 rounded-lg p-6 cursor-pointer
+            transform transition-transform hover:scale-105
+            ${selectedFang?.id === fang.id ? "ring-2 ring-blue-500" : ""}
+          `}
+        >
+          <h3 className="text-xl font-bold text-white mb-2">{fang.name}</h3>
+          <div className="text-gray-300 space-y-2">
+            <p>
+              <i className="fa fa-map-marker-alt mr-2"></i>
+              {fang.territory}
+            </p>
+            <p>
+              <i className="fa fa-crown mr-2"></i>
+              {fang.leader}
+            </p>
+            <p>
+              <i className="fa fa-magic mr-2"></i>
+              {fang.resonanceAffinity}
+            </p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderCreaturesSection = () => (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {creatures.map((creature) => (
+          <div key={creature.id} className="bg-gray-800 rounded-lg p-6">
+            <h3 className="text-xl font-bold text-white mb-2">
+              {creature.name}
+            </h3>
+            <div className="text-gray-300 space-y-2">
+              <p>
+                <i className="fa fa-paw mr-2"></i>Type: {creature.type}
+              </p>
+              <p>
+                <i className="fa fa-map mr-2"></i>Habitat: {creature.habitat}
+              </p>
+              <p>
+                <i className="fa fa-star mr-2"></i>Threat Level:{" "}
+                {creature.threatLevel}
+              </p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderResonanceSection = () => (
+    <div className="space-y-6">
+      <div className="bg-gray-800 rounded-lg p-6">
+        <h3 className="text-xl font-bold text-white mb-4">Resonance Levels</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          {resonanceData?.levels.map((level) => (
+            <div key={level.type} className="text-center">
+              <div className="text-lg font-bold text-white">{level.type}</div>
+              <div
+                className={`text-2xl ${
+                  level.status === "stable" ? "text-green-400" : "text-red-400"
+                }`}
+              >
+                {level.value}%
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="bg-gray-800 rounded-lg p-6">
+        <h3 className="text-xl font-bold text-white mb-4">Recent Events</h3>
+        <div className="space-y-2">
+          {resonanceData?.events.map((event) => (
+            <div key={event.id} className="flex items-center text-gray-300">
+              <i className="fa fa-bolt mr-2 text-yellow-400"></i>
+              <span>{event.description}</span>
+              <span className="ml-auto text-sm">{event.timestamp}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderFactionsSection = () => (
+    <div className="space-y-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {factions.map((faction) => (
+          <div key={faction.id} className="bg-gray-800 rounded-lg p-6">
+            <h3 className="text-xl font-bold text-white mb-2">
+              {faction.name}
+            </h3>
+            <div className="text-gray-300 space-y-2">
+              <p>
+                <i className="fa fa-users mr-2"></i>Members:{" "}
+                {faction.memberCount}
+              </p>
+              <p>
+                <i className="fa fa-handshake mr-2"></i>Alignment:{" "}
+                {faction.alignment}
+              </p>
+              <div className="mt-4">
+                <h4 className="font-bold mb-2">Relations:</h4>
+                <div className="space-y-1">
+                  {faction.relations.map((relation) => (
+                    <div key={relation.factionId} className="flex items-center">
+                      <span>{relation.factionName}</span>
+                      <div className="ml-auto flex items-center">
+                        {[...Array.from({ length: 5 })].map((_, i) => (
+                          <i
+                            key={i}
+                            className={`fa fa-circle text-xs mr-1 ${
+                              i < relation.standing
+                                ? "text-green-400"
+                                : "text-gray-600"
+                            }`}
+                          ></i>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white p-6">
+      <h1 className="text-3xl font-bold mb-8">Vel'Karion Manager</h1>
+
+      {error && (
+        <div className="bg-red-500 text-white p-4 rounded-lg mb-6">{error}</div>
+      )}
+
+      <div className="flex space-x-4 mb-6">
+        {[
+          { id: "fangs", name: "Five Fangs", icon: "fa-dragon" },
+          { id: "creatures", name: "Creatures", icon: "fa-paw" },
+          { id: "resonance", name: "Resonance", icon: "fa-wave-square" },
+          { id: "factions", name: "Factions", icon: "fa-users" },
+        ].map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={`
+              px-6 py-3 rounded-lg flex items-center
+              ${
+                activeTab === tab.id
+                  ? "bg-blue-600"
+                  : "bg-gray-800 hover:bg-gray-700"
+              }
+            `}
+          >
+            <i className={`fa ${tab.icon} mr-2`}></i>
+            {tab.name}
+          </button>
+        ))}
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center h-64">
+          <i className="fa fa-spinner fa-spin text-4xl"></i>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {activeTab === "fangs" && renderFangsSection()}
+          {activeTab === "creatures" && renderCreaturesSection()}
+          {activeTab === "resonance" && renderResonanceSection()}
+          {activeTab === "factions" && renderFactionsSection()}
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default MainComponent;
