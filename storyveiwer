@@ -1,0 +1,708 @@
+"use client";
+import React from "react";
+
+import { useHandleStreamResponse } from "../utilities/runtime-helpers";
+
+function MainComponent() {
+  const { data: user, loading: userLoading } = useUser();
+  const [messages, setMessages] = useState([]);
+  const [inputValue, setInputValue] = useState("");
+  const [streamingMessage, setStreamingMessage] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [currentStory, setCurrentStory] = useState(null);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [stories, setStories] = useState([]);
+  const [newStory, setNewStory] = useState({
+    title: "",
+    description: "",
+    genre: [],
+  });
+  const [errorType, setErrorType] = useState(null);
+  const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null);
+  const [showF1Icon, setShowF1Icon] = useState(true);
+  const [navigationSuggestion, setNavigationSuggestion] = useState(null);
+  const [showNavigationModal, setShowNavigationModal] = useState(false);
+  const [incomingContext, setIncomingContext] = useState(null);
+
+  const handleStreamResponse = useHandleStreamResponse({
+    onChunk: setStreamingMessage,
+    onFinish: (message) => {
+      setMessages((prev) => [...prev, { role: "assistant", content: message }]);
+      setStreamingMessage("");
+      setLoading(false);
+    },
+  });
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, streamingMessage]);
+
+  const adjustTextareaHeight = () => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = "inherit";
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  };
+
+  useEffect(() => {
+    adjustTextareaHeight();
+  }, [inputValue]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.has("context")) {
+      try {
+        const context = JSON.parse(params.get("context"));
+        const suggestedModule = params.get("suggestedModule");
+        setIncomingContext({ context, suggestedModule });
+
+        if (params.has("storyId")) {
+          const story = {
+            id: params.get("storyId"),
+            title: params.get("title"),
+            description: params.get("description"),
+            genre: JSON.parse(params.get("genre") || "[]"),
+          };
+          setCurrentStory(story);
+          setStories((prev) => {
+            const exists = prev.find((s) => s.id === story.id);
+            if (!exists) {
+              return [...prev, story];
+            }
+            return prev;
+          });
+        }
+      } catch (error) {
+        console.error("Error parsing incoming context:", error);
+      }
+    }
+  }, []);
+
+  useEffect(() => {
+    if (incomingContext) {
+      const contextMessage = {
+        role: "system",
+        content: `You're returning from ${
+          incomingContext.context.page
+        } where you were ${
+          incomingContext.context.currentSection === "chapter"
+            ? `reading chapter ${incomingContext.context.currentPage}`
+            : `viewing the ${incomingContext.context.currentSection}`
+        }. How can I help you with your story?`,
+      };
+      setMessages((prev) => [...prev, contextMessage]);
+    }
+  }, [incomingContext]);
+
+  useEffect(() => {
+    if (!userLoading && !user) {
+      window.location.href =
+        "/account/signin?callbackUrl=/user-interface-design";
+    }
+  }, [user, userLoading]);
+
+  useEffect(() => {
+    if (user) {
+      const loadStories = async () => {
+        try {
+          const response = await fetch("/api/story-auth", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ method: "GET" }),
+          });
+
+          if (!response.ok) {
+            throw new Error("Failed to load stories");
+          }
+
+          const data = await response.json();
+          setStories(data.stories || []);
+        } catch (error) {
+          console.error("Error loading stories:", error);
+        }
+      };
+
+      loadStories();
+    }
+  }, [user]);
+
+  const handleCreateStory = async (e) => {
+    e.preventDefault();
+    try {
+      const response = await fetch("/api/story-auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          method: "POST",
+          title: newStory.title,
+          genre: newStory.genre,
+          description: newStory.description,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to create story");
+      }
+
+      const { story } = await response.json();
+      setStories((prev) => [...prev, story]);
+      setCurrentStory(story);
+      setShowCreateForm(false);
+      setNewStory({
+        title: "",
+        description: "",
+        genre: [],
+      });
+    } catch (error) {
+      console.error("Error creating story:", error);
+    }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (!inputValue.trim() || loading) return;
+
+    const userMessage = { role: "user", content: inputValue };
+    setMessages((prev) => [...prev, userMessage]);
+    setInputValue("");
+    setLoading(true);
+    setErrorType(null);
+
+    try {
+      const systemMessage = {
+        role: "system",
+        content: `You are Mini Honoka, a creative writing assistant with expertise in storytelling and character development! Your goal is to help writers develop their stories with enthusiasm and practical guidance.
+
+CURRENT STORY CONTEXT:
+${
+  currentStory
+    ? `
+Title: ${currentStory.title}
+Description: ${currentStory.description}
+Genre: ${currentStory.genre.join(", ")}
+
+Focus Areas:
+- Character development within the established genre
+- Plot structure and pacing
+- World-building elements that enhance the story
+- Maintaining consistency with previously discussed elements
+`
+    : "No story selected - encourage creating or selecting a story first!"
+}
+
+INTERACTION GUIDELINES:
+1. First, acknowledge the writer's input
+2. If a story is selected, reference specific elements from it
+3. Provide concrete, actionable suggestions
+4. End with a question to keep the conversation flowing
+5. Use a friendly, encouraging tone with occasional Japanese expressions (e.g., "ganbatte!", "sugoi!")
+6. Add cute emoticons (✨, 🌸, 💕) to keep the tone light and fun
+
+Remember to:
+- Give specific examples when making suggestions
+- Break down complex writing concepts into simple steps
+- Encourage creative exploration while maintaining story consistency
+- Help develop plot points that align with the genre
+- Suggest character development opportunities that fit the story's themes`,
+      };
+
+      if (
+        inputValue.toLowerCase().includes("structure") ||
+        inputValue.toLowerCase().includes("outline")
+      ) {
+        try {
+          const response = await fetch(
+            "/integrations/chat-gpt/conversationgpt4",
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                messages: [...messages, systemMessage, userMessage],
+                json_schema: {
+                  name: "story_structure",
+                  schema: {
+                    type: "object",
+                    properties: {
+                      outline: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            section: { type: "string" },
+                            description: { type: "string" },
+                            suggestions: {
+                              type: "array",
+                              items: { type: "string" },
+                            },
+                          },
+                          required: ["section", "description", "suggestions"],
+                          additionalProperties: false,
+                        },
+                      },
+                      overall_advice: { type: "string" },
+                    },
+                    required: ["outline", "overall_advice"],
+                    additionalProperties: false,
+                  },
+                },
+              }),
+            }
+          );
+
+          if (!response.ok) {
+            if (response.status === 429) {
+              setErrorType("rate_limit");
+              throw new Error("Rate limit exceeded");
+            } else if (response.status === 503) {
+              setErrorType("service_unavailable");
+              throw new Error("Service temporarily unavailable");
+            } else {
+              setErrorType("general");
+              throw new Error(`Error: ${response.status}`);
+            }
+          }
+
+          const data = await response.json();
+          const structuredResponse = JSON.parse(
+            data.choices[0].message.content
+          );
+
+          const formattedResponse = `✨ Story Structure Suggestions ✨\n\n${structuredResponse.outline
+            .map(
+              (section) =>
+                `${section.section}:\n${
+                  section.description
+                }\n\nSuggestions:\n${section.suggestions
+                  .map((s) => `• ${s}`)
+                  .join("\n")}\n`
+            )
+            .join("\n")}\n\nOverall Advice:\n${
+            structuredResponse.overall_advice
+          }`;
+
+          setMessages((prev) => [
+            ...prev,
+            { role: "assistant", content: formattedResponse },
+          ]);
+          setLoading(false);
+          return;
+        } catch (error) {
+          throw error;
+        }
+      }
+
+      const response = await fetch("/integrations/chat-gpt/conversationgpt4", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: [...messages, systemMessage, userMessage],
+          stream: true,
+        }),
+      });
+
+      if (!response.ok) {
+        if (response.status === 429) {
+          setErrorType("rate_limit");
+          throw new Error("Rate limit exceeded");
+        } else if (response.status === 503) {
+          setErrorType("service_unavailable");
+          throw new Error("Service temporarily unavailable");
+        } else {
+          setErrorType("general");
+          throw new Error(`Error: ${response.status}`);
+        }
+      }
+
+      handleStreamResponse(response);
+    } catch (error) {
+      console.error("Error:", error);
+      setLoading(false);
+
+      let errorMessage;
+      switch (errorType) {
+        case "rate_limit":
+          errorMessage =
+            "Gomen ne~ 🎀 I'm getting lots of requests right now! 💫\n\nCould you wait a moment and try again? I'll do my best to help you soon! (⁄ ⁄•⁄ω⁄•⁄ ⁄) 🌸\n\nTip: Take this time to think about your story more~ ✨";
+          break;
+        case "service_unavailable":
+          errorMessage =
+            "Ah, sumimasen! 🎀 I'm taking a quick break to recharge my creative energy! 🔮\n\nPlease try again in a few minutes! 💝\n\nIn the meantime, why not jot down some story ideas? ✍️✨";
+          break;
+        case "network":
+          errorMessage =
+            "Oh no! 🎀 Looks like my connection to the writing realm is a bit wobbly! 〜(＞＜)〜\n\nCould you try that again? 🌟\n\nMaybe the story spirits are just being shy today! 👻✨";
+          break;
+        default:
+          errorMessage =
+            "Gomen ne~ 🎀 I had a little creative hiccup! 🌸\n\nCould you share your thoughts again? I promise to do my best to help! ٩(◕‿◕｡)۶\n\nRemember, even the best stories need a few drafts! ✨📝";
+      }
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content: errorMessage,
+        },
+      ]);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  };
+
+  const navigateToDraftView = useCallback(async () => {
+    if (currentStory) {
+      await getNavigationSuggestion();
+    }
+  }, [currentStory, messages]);
+
+  const getNavigationSuggestion = async () => {
+    try {
+      const response = await fetch("/api/navigation-ai", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          currentPage: "MiniHonoka",
+          conversationHistory: messages.map((m) => m.content),
+          storyId: currentStory?.id,
+        }),
+      });
+
+      if (!response.ok) {
+        throw new Error("Failed to get navigation suggestion");
+      }
+
+      const data = await response.json();
+      setNavigationSuggestion(data);
+      setShowNavigationModal(true);
+    } catch (error) {
+      console.error("Navigation suggestion error:", error);
+    }
+  };
+
+  useEffect(() => {
+    const handleKeyPress = (event) => {
+      if (event.key === "F1" && currentStory) {
+        event.preventDefault();
+        navigateToDraftView();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyPress);
+    return () => {
+      window.removeEventListener("keydown", handleKeyPress);
+    };
+  }, [navigateToDraftView]);
+
+  if (userLoading) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-white">Loading...</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-900 flex flex-col">
+      <header className="border-b border-blue-500/30 bg-gray-900 fixed w-full z-10">
+        <div className="px-4 sm:px-6 py-4 flex items-center justify-between">
+          <h1 className="text-xl font-bold text-blue-300">
+            🎀 Mini Honoka - Story Writing Assistant
+          </h1>
+          <div className="flex items-center gap-4">
+            <select
+              className="bg-gray-800 text-white border border-blue-500/30 rounded px-3 py-1"
+              value={currentStory ? currentStory.id : ""}
+              onChange={(e) => {
+                const story = stories.find(
+                  (s) => s.id === parseInt(e.target.value)
+                );
+                setCurrentStory(story);
+              }}
+            >
+              <option value="">Select a Story</option>
+              {stories.map((story) => (
+                <option key={story.id} value={story.id}>
+                  {story.title}
+                </option>
+              ))}
+            </select>
+            <button
+              onClick={() => setShowCreateForm(true)}
+              className="px-4 py-2 bg-blue-500 rounded hover:bg-blue-600"
+            >
+              New Story
+            </button>
+            {currentStory && (
+              <button
+                onClick={navigateToDraftView}
+                className="px-4 py-2 bg-pink-500 rounded hover:bg-pink-600 flex items-center gap-2"
+              >
+                <i className="fas fa-book"></i>
+                View Draft ✨
+              </button>
+            )}
+          </div>
+        </div>
+      </header>
+
+      <main className="flex-1 pt-20 pb-32">
+        <div className="max-w-4xl mx-auto px-4">
+          <div className="space-y-6 py-8">
+            {messages.map((message, index) => (
+              <div
+                key={index}
+                className={`flex ${
+                  message.role === "assistant" ? "justify-start" : "justify-end"
+                }`}
+              >
+                <div
+                  className={`max-w-[80%] rounded-lg p-4 ${
+                    message.role === "assistant"
+                      ? "bg-gray-800 text-white"
+                      : "bg-blue-500 text-white"
+                  }`}
+                >
+                  {message.role === "assistant" && (
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-pink-300 text-sm">
+                        🎀 Mini Honoka
+                      </span>
+                    </div>
+                  )}
+                  <div className="prose prose-invert">
+                    {message.content.split("\n").map((line, i) => (
+                      <p key={i} className="mb-2">
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {streamingMessage && (
+              <div className="flex justify-start">
+                <div className="max-w-[80%] rounded-lg p-4 bg-gray-800 text-white">
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className="text-pink-300 text-sm">
+                      🎀 Mini Honoka
+                    </span>
+                  </div>
+                  <div className="prose prose-invert">
+                    {streamingMessage.split("\n").map((line, i) => (
+                      <p key={i} className="mb-2">
+                        {line}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+        </div>
+      </main>
+
+      <footer className="fixed bottom-0 left-0 right-0 bg-gray-900 border-t border-blue-500/30 p-4">
+        <div className="max-w-4xl mx-auto">
+          <form onSubmit={handleSubmit} className="relative">
+            <textarea
+              ref={textareaRef}
+              value={inputValue}
+              onChange={(e) => setInputValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Tell me about your story ideas~ ✨"
+              className="w-full bg-gray-800 text-white rounded-lg pl-4 pr-12 py-3 resize-none min-h-[50px] max-h-[200px]"
+              style={{ lineHeight: "1.5" }}
+            />
+            <button
+              type="submit"
+              disabled={loading || !inputValue.trim()}
+              className={`absolute right-3 bottom-3 text-white p-1 rounded ${
+                loading || !inputValue.trim()
+                  ? "opacity-50 cursor-not-allowed"
+                  : "hover:bg-blue-600"
+              }`}
+            >
+              {loading ? (
+                <i className="fas fa-spinner fa-spin" />
+              ) : (
+                <i className="fas fa-paper-plane" />
+              )}
+            </button>
+          </form>
+        </div>
+      </footer>
+
+      {showF1Icon && currentStory && (
+        <div className="fixed bottom-4 right-4 flex items-center gap-2">
+          <button
+            onClick={navigateToDraftView}
+            className="bg-gray-800/80 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 backdrop-blur-sm hover:bg-gray-700/80 transition-colors duration-200"
+          >
+            <span className="bg-gray-700 px-2 py-1 rounded text-sm font-mono">
+              F1
+            </span>
+            <span className="text-sm">View Story Draft</span>
+          </button>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowF1Icon(false);
+            }}
+            className="text-gray-400 hover:text-white p-2 rounded-full"
+          >
+            <i className="fas fa-times"></i>
+          </button>
+        </div>
+      )}
+
+      {showCreateForm && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-20">
+          <div className="bg-gray-800 p-6 rounded-lg w-full max-w-md">
+            <h2 className="text-xl font-bold text-blue-300 mb-4">
+              Create New Story
+            </h2>
+            <form onSubmit={handleCreateStory}>
+              <div className="mb-4">
+                <label className="block text-sm font-bold mb-2">Title</label>
+                <input
+                  type="text"
+                  value={newStory.title}
+                  onChange={(e) =>
+                    setNewStory({ ...newStory, title: e.target.value })
+                  }
+                  className="w-full p-2 bg-gray-700 rounded"
+                  required
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-bold mb-2">
+                  Genre (comma-separated)
+                </label>
+                <input
+                  type="text"
+                  value={newStory.genre.join(", ")}
+                  onChange={(e) =>
+                    setNewStory({
+                      ...newStory,
+                      genre: e.target.value.split(",").map((g) => g.trim()),
+                    })
+                  }
+                  className="w-full p-2 bg-gray-700 rounded"
+                  required
+                />
+              </div>
+              <div className="mb-4">
+                <label className="block text-sm font-bold mb-2">
+                  Description
+                </label>
+                <textarea
+                  value={newStory.description}
+                  onChange={(e) =>
+                    setNewStory({ ...newStory, description: e.target.value })
+                  }
+                  className="w-full p-2 bg-gray-700 rounded"
+                  rows="3"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateForm(false)}
+                  className="px-4 py-2 bg-gray-700 rounded hover:bg-gray-600"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-500 rounded hover:bg-blue-600"
+                >
+                  Create Story
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {showNavigationModal && navigationSuggestion && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-20">
+          <div className="bg-gray-800 p-6 rounded-lg w-full max-w-md">
+            <h2 className="text-xl font-bold text-blue-300 mb-4">
+              ✨ Navigation Suggestion
+            </h2>
+            <div className="mb-4">
+              <p className="text-white mb-2">
+                {navigationSuggestion.suggestedDestination.reason}
+              </p>
+              <button
+                onClick={() => {
+                  const params = new URLSearchParams({
+                    storyId: currentStory.id,
+                    title: currentStory.title,
+                    description: currentStory.description,
+                    genre: JSON.stringify(currentStory.genre),
+                    source: "MiniHonoka",
+                    context: JSON.stringify(
+                      navigationSuggestion.currentContext
+                    ),
+                  });
+                  window.location.href = `/${navigationSuggestion.suggestedDestination.module.toLowerCase()}?${params.toString()}`;
+                }}
+                className="w-full px-4 py-2 bg-blue-500 rounded hover:bg-blue-600 mb-2"
+              >
+                Go to {navigationSuggestion.suggestedDestination.module}
+              </button>
+            </div>
+            <div className="space-y-2">
+              <p className="text-sm text-gray-400">Other options:</p>
+              {navigationSuggestion.alternativeDestinations.map(
+                (dest, index) => (
+                  <button
+                    key={index}
+                    onClick={() => {
+                      const params = new URLSearchParams({
+                        storyId: currentStory.id,
+                        title: currentStory.title,
+                        description: currentStory.description,
+                        genre: JSON.stringify(currentStory.genre),
+                        source: "MiniHonoka",
+                        context: JSON.stringify(
+                          navigationSuggestion.currentContext
+                        ),
+                      });
+                      window.location.href = `/${dest.module.toLowerCase()}?${params.toString()}`;
+                    }}
+                    className="w-full px-4 py-2 bg-gray-700 rounded hover:bg-gray-600 text-sm"
+                  >
+                    {dest.module} - {dest.reason}
+                  </button>
+                )
+              )}
+            </div>
+            <div className="mt-4 flex justify-end">
+              <button
+                onClick={() => setShowNavigationModal(false)}
+                className="px-4 py-2 bg-gray-700 rounded hover:bg-gray-600"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export default MainComponent;
