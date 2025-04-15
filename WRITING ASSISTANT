@@ -1,0 +1,289 @@
+"use client";
+import React from "react";
+
+function MainComponent() {
+  const [selectedFeature, setSelectedFeature] = useState("story");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+  const [stories, setStories] = useState([]);
+  const [selectedStory, setSelectedStory] = useState(null);
+  const [characters, setCharacters] = useState([]);
+  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [aiSuggestion, setAiSuggestion] = useState(null);
+  const [generating, setGenerating] = useState(false);
+  const [newStory, setNewStory] = useState({
+    title: "",
+    genre: [],
+    description: "",
+  });
+
+  const features = [
+    { id: "story", name: "Story Management", icon: "fa-book" },
+    { id: "characters", name: "Characters", icon: "fa-users" },
+    { id: "world", name: "World Building", icon: "fa-globe" },
+    { id: "timeline", name: "Timeline", icon: "fa-clock" },
+    { id: "ai", name: "AI Assistant", icon: "fa-robot" },
+  ];
+
+  const genreOptions = [
+    "Fantasy",
+    "Martial Arts",
+    "Murim",
+    "Regression",
+    "Action",
+    "Adventure",
+    "Romance",
+    "Mystery",
+  ];
+
+  const fetchStories = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/stories/list", { method: "POST" });
+      if (!response.ok) throw new Error("Failed to fetch stories");
+      const data = await response.json();
+      setStories(data.stories || []);
+    } catch (err) {
+      setError("Failed to load stories");
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchCharacters = async (storyId) => {
+    if (!storyId) return;
+    try {
+      const response = await fetch("/api/characters/manage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "list", storyId }),
+      });
+      if (!response.ok) throw new Error("Failed to fetch characters");
+      const data = await response.json();
+      setCharacters(data.characters || []);
+    } catch (err) {
+      console.error(err);
+      setError("Failed to load characters");
+    }
+  };
+
+  const handleCreateStory = async (e) => {
+    e.preventDefault();
+    setError(null);
+    try {
+      const response = await fetch("/api/stories/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(newStory),
+      });
+      if (!response.ok) throw new Error("Failed to create story");
+      await fetchStories();
+      setShowCreateForm(false);
+      setNewStory({ title: "", genre: [], description: "" });
+    } catch (err) {
+      setError("Failed to create story");
+      console.error(err);
+    }
+  };
+
+  useEffect(() => {
+    fetchStories();
+  }, []);
+
+  useEffect(() => {
+    if (selectedStory) {
+      fetchCharacters(selectedStory.id);
+    }
+  }, [selectedStory]);
+
+  const renderStoryManagement = () => (
+    <div className="space-y-6">
+      <div className="flex justify-between items-center">
+        <h2 className="text-2xl font-bold text-gray-900 dark:text-gray-100">
+          Story Management
+        </h2>
+        <button
+          onClick={() => setShowCreateForm(true)}
+          className="bg-gray-900 dark:bg-gray-700 text-white px-4 py-2 rounded hover:bg-gray-800"
+        >
+          <i className="fa fa-plus mr-2"></i>Create New Story
+        </button>
+      </div>
+
+      {showCreateForm && (
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow-lg">
+          <form onSubmit={handleCreateStory}>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Title
+                </label>
+                <input
+                  type="text"
+                  name="title"
+                  value={newStory.title}
+                  onChange={(e) =>
+                    setNewStory({ ...newStory, title: e.target.value })
+                  }
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm dark:bg-gray-700 dark:border-gray-600"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Genres
+                </label>
+                <div className="mt-2 grid grid-cols-2 md:grid-cols-4 gap-2">
+                  {genreOptions.map((genre) => (
+                    <label key={genre} className="inline-flex items-center">
+                      <input
+                        type="checkbox"
+                        name="genre"
+                        checked={newStory.genre.includes(genre)}
+                        onChange={(e) => {
+                          const updatedGenres = e.target.checked
+                            ? [...newStory.genre, genre]
+                            : newStory.genre.filter((g) => g !== genre);
+                          setNewStory({ ...newStory, genre: updatedGenres });
+                        }}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="ml-2 text-gray-700 dark:text-gray-300">
+                        {genre}
+                      </span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Description
+                </label>
+                <textarea
+                  name="description"
+                  value={newStory.description}
+                  onChange={(e) =>
+                    setNewStory({ ...newStory, description: e.target.value })
+                  }
+                  rows="4"
+                  className="mt-1 block w-full rounded-md border-gray-300 shadow-sm dark:bg-gray-700 dark:border-gray-600"
+                ></textarea>
+              </div>
+              <div className="flex justify-end space-x-3">
+                <button
+                  type="button"
+                  onClick={() => setShowCreateForm(false)}
+                  className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-gray-900 dark:bg-gray-700 text-white rounded hover:bg-gray-800"
+                >
+                  Create Story
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {stories.map((story) => (
+          <div
+            key={story.id}
+            onClick={() => setSelectedStory(story)}
+            className={`
+              bg-white dark:bg-gray-800 rounded-lg p-6 cursor-pointer
+              ${selectedStory?.id === story.id ? "ring-2 ring-blue-500" : ""}
+            `}
+          >
+            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+              {story.title}
+            </h3>
+            <div className="mt-2 flex flex-wrap gap-2">
+              {story.genre.map((g) => (
+                <span
+                  key={g}
+                  className="px-2 py-1 bg-gray-100 dark:bg-gray-700 rounded text-sm"
+                >
+                  {g}
+                </span>
+              ))}
+            </div>
+            <p className="mt-4 text-gray-600 dark:text-gray-300">
+              {story.description}
+            </p>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderContent = () => {
+    switch (selectedFeature) {
+      case "story":
+        return renderStoryManagement();
+      default:
+        return (
+          <div className="text-center py-12">
+            <p className="text-gray-600 dark:text-gray-300">
+              This feature is coming soon...
+            </p>
+          </div>
+        );
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="flex">
+        <nav className="w-64 bg-white dark:bg-gray-800 h-screen fixed border-r border-gray-200 dark:border-gray-700">
+          <div className="p-6">
+            <h1 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-8">
+              Writing Assistant
+            </h1>
+            <div className="space-y-2">
+              {features.map((feature) => (
+                <button
+                  key={feature.id}
+                  onClick={() => setSelectedFeature(feature.id)}
+                  className={`
+                    w-full px-4 py-2 rounded text-left flex items-center
+                    ${
+                      selectedFeature === feature.id
+                        ? "bg-gray-900 text-white dark:bg-gray-700"
+                        : "text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700"
+                    }
+                  `}
+                >
+                  <i className={`fa ${feature.icon} mr-3`}></i>
+                  {feature.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        </nav>
+
+        <main className="ml-64 flex-1 p-6">
+          {error && (
+            <div className="mb-6 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded">
+              {error}
+            </div>
+          )}
+          {loading ? (
+            <div className="flex justify-center items-center h-64">
+              <i className="fa fa-spinner fa-spin text-4xl text-gray-400"></i>
+            </div>
+          ) : (
+            renderContent()
+          )}
+        </main>
+      </div>
+    </div>
+  );
+}
+
+export default MainComponent;
