@@ -1,0 +1,214 @@
+"use client";
+import React from "react";
+
+function MainComponent() {
+  const { data: user, loading: userLoading } = useUser();
+  const [stories, setStories] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState(null);
+
+  const features = [
+    {
+      name: "Mini Honoka AI",
+      path: "/",
+      icon: "fa-robot",
+      description: "AI-powered writing assistant",
+    },
+    {
+      name: "Story Draft Viewer",
+      path: "/story-draft-viewer",
+      icon: "fa-book-open",
+      description: "View and edit your drafts",
+    },
+    {
+      name: "Vel'Karion Manager",
+      path: "/vel-karion-manager",
+      icon: "fa-dragon",
+      description: "Manage your world",
+    },
+    {
+      name: "World Map Editor",
+      path: "/world-map-editor",
+      icon: "fa-map",
+      description: "Create and edit world maps",
+    },
+  ];
+
+  useEffect(() => {
+    const fetchStories = async () => {
+      setLoading(true);
+      try {
+        const response = await fetch("/api/stories/list", { method: "POST" });
+        if (!response.ok) {
+          throw new Error("Failed to fetch stories");
+        }
+        const data = await response.json();
+        setStories(data.stories || []);
+      } catch (err) {
+        console.error(err);
+        setError("Failed to load stories");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (user) {
+      fetchStories();
+    }
+  }, [user]);
+
+  if (userLoading) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <i className="fa fa-spinner fa-spin text-4xl text-white"></i>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-3xl font-bold text-white mb-4">
+            Welcome to Create
+          </h1>
+          <div className="space-x-4">
+            <a
+              href="/account/signin"
+              className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+            >
+              Sign In
+            </a>
+            <a
+              href="/account/signup"
+              className="bg-gray-700 text-white px-6 py-2 rounded-lg hover:bg-gray-600"
+            >
+              Sign Up
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen bg-gray-900 text-white p-6">
+      <div className="max-w-7xl mx-auto">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">
+              Welcome back, {user.name}
+            </h1>
+            <p className="text-gray-400">{user.email}</p>
+          </div>
+          <a
+            href="/account/logout"
+            className="mt-4 md:mt-0 bg-gray-800 text-white px-4 py-2 rounded hover:bg-gray-700"
+          >
+            <i className="fa fa-sign-out-alt mr-2"></i>
+            Sign Out
+          </a>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          {features.map((feature) => (
+            <a
+              key={feature.name}
+              href={feature.path}
+              className="bg-gray-800 rounded-lg p-6 hover:bg-gray-700 transition-colors"
+            >
+              <i
+                className={`fa ${feature.icon} text-2xl mb-4 text-blue-500`}
+              ></i>
+              <h2 className="text-xl font-bold mb-2">{feature.name}</h2>
+              <p className="text-gray-400">{feature.description}</p>
+            </a>
+          ))}
+        </div>
+
+        <div className="bg-gray-800 rounded-lg p-6 mb-8">
+          <h2 className="text-2xl font-bold mb-6">Your Stories</h2>
+          {error && (
+            <div className="bg-red-500 bg-opacity-10 text-red-400 p-4 rounded-lg mb-4">
+              {error}
+            </div>
+          )}
+          {loading ? (
+            <div className="flex justify-center">
+              <i className="fa fa-spinner fa-spin text-2xl"></i>
+            </div>
+          ) : stories.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {stories.map((story) => (
+                <div key={story.id} className="bg-gray-700 rounded-lg p-6">
+                  <h3 className="text-xl font-bold mb-2">{story.title}</h3>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {story.genre.map((genre) => (
+                      <span
+                        key={genre}
+                        className="bg-gray-600 text-sm px-2 py-1 rounded"
+                      >
+                        {genre}
+                      </span>
+                    ))}
+                  </div>
+                  <p className="text-gray-400 mb-4">
+                    {story.description || "No description"}
+                  </p>
+                  <a
+                    href="/"
+                    className="inline-block bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
+                  >
+                    Continue Writing
+                  </a>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-gray-400 mb-4">
+                You haven't created any stories yet
+              </p>
+              <a
+                href="/"
+                className="inline-block bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700"
+              >
+                Start Writing
+              </a>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-gray-800 rounded-lg p-6">
+          <h2 className="text-2xl font-bold mb-6">Writing Progress</h2>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="bg-gray-700 rounded-lg p-6 text-center">
+              <div className="text-3xl font-bold mb-2">{stories.length}</div>
+              <div className="text-gray-400">Total Stories</div>
+            </div>
+            <div className="bg-gray-700 rounded-lg p-6 text-center">
+              <div className="text-3xl font-bold mb-2">
+                {stories.reduce(
+                  (total, story) => total + (story.wordCount || 0),
+                  0
+                )}
+              </div>
+              <div className="text-gray-400">Total Words Written</div>
+            </div>
+            <div className="bg-gray-700 rounded-lg p-6 text-center">
+              <div className="text-3xl font-bold mb-2">
+                {stories.reduce(
+                  (total, story) => total + (story.chapters?.length || 0),
+                  0
+                )}
+              </div>
+              <div className="text-gray-400">Total Chapters</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+export default MainComponent;
